@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: qahva-cafe
+    runtime: node
+    plan: free
+    # --include=dev is REQUIRED: vite + @types/react live in devDependencies
+    buildCommand: cd frontend && npm install --include=dev && npm run build && cd ../backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: ADMIN_USER
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: RESET_KEY
+        sync: false
