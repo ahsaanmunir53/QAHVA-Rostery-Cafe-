@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { readJson, writeJson, exists } from './db.js';
+import { DEFAULT_MENU, DEFAULT_TESTIMONIALS, DEFAULT_GALLERY, DEFAULT_SETTINGS } from './seeds.js';
 
 dotenv.config();
 const app = express();
@@ -81,67 +82,8 @@ function auth(req, res, next) {
 }
 
 /* ---------------- seeds ---------------- */
-let n = 0;
-const P = (category, name, price, description, opts = {}) => ({
-  id: `item-${++n}`,
-  category, name, price, description,
-  featured: !!opts.featured,
-  soldOut: !!opts.soldOut,
-  tag: opts.tag || '',
-  image: '',
-});
-
-const DEFAULT_MENU = [
-  P('Espresso Bar', 'Espresso', 350, 'A precise double shot — chocolatey, syrupy, never bitter.'),
-  P('Espresso Bar', 'Americano', 450, 'Double shot lengthened with hot water. Clean and bright.'),
-  P('Espresso Bar', 'Cappuccino', 550, 'Equal parts espresso, steamed milk and silky microfoam.', { tag: 'bestseller' }),
-  P('Espresso Bar', 'Flat White', 600, 'Stronger, smaller, smoother — for people who mean it.'),
-  P('Espresso Bar', 'Signature Latte', 650, 'Our house latte with slow-steamed milk and latte art on every pour.', { featured: true, tag: 'bestseller' }),
-  P('Espresso Bar', 'Dark Mocha', 700, '70% dark chocolate melted into espresso, topped with foam.'),
-  P('Slow Brews', 'V60 Pour Over', 750, 'Single-origin of the week, brewed by hand over three minutes.', { featured: true }),
-  P('Slow Brews', 'Chemex (for two)', 850, 'A slower, softer cup — floral and tea-like. Made to share.'),
-  P('Slow Brews', 'French Press', 650, 'Full-bodied and honest. Four minutes, plunged at your table.'),
-  P('Iced & Cold Brew', 'Classic Cold Brew', 700, 'Steeped 18 hours, served over crystal ice. Naturally sweet.', { featured: true, tag: 'new' }),
-  P('Iced & Cold Brew', 'Iced Spanish Latte', 800, 'Espresso, condensed milk and cold milk over ice — the summer icon.', { featured: true, tag: 'bestseller' }),
-  P('Iced & Cold Brew', 'Gold-Dust Affogato', 750, 'Vanilla gelato drowned in espresso, finished with gold dust.', { tag: 'new' }),
-  P('Iced & Cold Brew', 'Iced Caramel Macchiato', 850, 'Layered milk, house caramel and a double shot poured through.'),
-  P('Qahva & Chai', 'Traditional Qahva', 350, 'Green tea, cardamom, almonds and saffron — the original.', { tag: 'bestseller' }),
-  P('Qahva & Chai', 'Kashmiri Chai', 400, 'Pink, salted, and finished with crushed pistachio.'),
-  P('Qahva & Chai', 'Karak Chai', 300, 'Strong doodh patti brewed the dhaba way, minus the traffic.'),
-  P('Bakery', 'Butter Croissant', 450, 'Laminated in-house — 27 layers, all of them worth it.'),
-  P('Bakery', 'Chocolate Fudge Brownie', 500, 'Dense, dark and slightly under-baked on purpose.', { featured: true }),
-  P('Bakery', 'New York Cheesecake', 700, 'Baked slow, chilled overnight, sliced generously.'),
-  P('Bakery', 'Almond Biscotti', 300, 'Twice-baked, made for dunking in your americano.', { soldOut: true }),
-];
-
-const DEFAULT_TESTIMONIALS = [
-  { id: uid(), name: 'Hassan R.', text: 'First place in Lahore where the flat white tastes like the ones I missed from Melbourne. Dialled-in every single time.', stars: 5, approved: true },
-  { id: uid(), name: 'Mariam S.', text: 'The Iced Spanish Latte is dangerously good. Ordered online, it was ready before I found parking.', stars: 5, approved: true },
-  { id: uid(), name: 'Bilal A.', text: 'Asked the barista about the beans and got a five-minute origin story. This is a coffee shop run by coffee people.', stars: 5, approved: true },
-  { id: uid(), name: 'Dr. Sana', text: 'Quiet corners, fast Wi-Fi, and a V60 that actually tastes of something. My new office.', stars: 4, approved: true },
-  { id: uid(), name: 'Omar K.', text: 'Cold brew is steeped 18 hours and you can tell. Smooth, no acid, no sugar needed.', stars: 5, approved: true },
-  { id: uid(), name: 'Ayesha M.', text: 'The croissants sell out by noon for a reason. Go early.', stars: 5, approved: true },
-];
-
-const DEFAULT_GALLERY = [
-  { id: uid(), title: 'Morning roast', url: '' },
-  { id: uid(), title: 'Latte art', url: '' },
-  { id: uid(), title: 'The pour', url: '' },
-  { id: uid(), title: 'Cold brew tower', url: '' },
-  { id: uid(), title: 'Bakery counter', url: '' },
-  { id: uid(), title: 'The bench outside', url: '' },
-];
-
-const DEFAULT_SETTINGS = {
-  phone: '+92 300 0000000',
-  whatsapp: '923000000000',
-  email: 'hello@qahva.pk',
-  address: 'Demo Roastery, MM Alam Road, Gulberg III, Lahore',
-  hours: 'Open daily · 8:00 am – 11:00 pm',
-  deliveryFee: 200,
-  freeOver: 2500,
-  openForOrders: true,
-};
+// Content lives in seeds.js — menu, images, gallery, reviews and contact
+// details. Anything missing on disk is rebuilt from there on boot.
 
 if (!exists('menu')) writeJson('menu', DEFAULT_MENU);
 if (!exists('testimonials')) writeJson('testimonials', DEFAULT_TESTIMONIALS);
