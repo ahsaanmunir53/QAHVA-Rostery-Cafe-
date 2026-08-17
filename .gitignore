@@ -15,3 +15,8 @@ build/
 *.log
 .DS_Store
 Thumbs.db
+
+# runtime data — regenerated from the seeds in server.js on boot.
+# Committing these is what made the admin password and login tokens
+# revert on every deploy.
+backend/data/

@@ -6,6 +6,7 @@ services:
     # --include=dev is REQUIRED: vite + @types/react live in devDependencies
     buildCommand: cd frontend && npm install --include=dev && npm run build && cd ../backend && npm install
     startCommand: cd backend && npm start
+    healthCheckPath: /api/health
     envVars:
       - key: ADMIN_USER
         sync: false
@@ -13,3 +14,8 @@ services:
         sync: false
       - key: RESET_KEY
         sync: false
+      # Keeps admin sessions valid across restarts. Any long random string.
+      - key: TOKEN_SECRET
+        generateValue: true
+    # VITE_API_URL is deliberately absent. The backend serves the frontend build,
+    # so the browser calls /api on the same origin.

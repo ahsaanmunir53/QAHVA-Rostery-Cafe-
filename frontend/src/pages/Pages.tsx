@@ -24,11 +24,14 @@ export function MenuPage() {
   const { add } = useCart();
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [params, setParams] = useSearchParams();
   const cat = params.get('cat') || 'All';
 
   useEffect(() => {
-    apiGet<MenuItem[]>('/api/menu').then((r) => r.ok && setItems(r.data)).finally(() => setLoading(false));
+    apiGet<MenuItem[]>('/api/menu')
+      .then((r) => (r.ok && Array.isArray(r.data) ? setItems(r.data) : setFailed(true)))
+      .finally(() => setLoading(false));
   }, []);
 
   const categories = ['All', ...new Set(items.map((m) => m.category))];
@@ -51,6 +54,19 @@ export function MenuPage() {
         </div>
         {loading ? (
           <p className="text-center text-smoke">Grinding through the menu…</p>
+        ) : failed ? (
+          <div className="mx-auto max-w-md border border-line bg-foam p-8 text-center">
+            <p className="font-display text-2xl">The menu didn't load</p>
+            <p className="mt-2 text-sm text-smoke">
+              The kitchen server didn't answer. Give it a moment and try again.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-5 bg-espresso px-5 py-2.5 text-[11px] uppercase tracking-label text-foam transition-colors hover:bg-gold hover:text-espresso"
+            >
+              Retry
+            </button>
+          </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((m, i) => (

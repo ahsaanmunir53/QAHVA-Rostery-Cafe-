@@ -24,22 +24,59 @@ const hashPassword = (pw, salt = crypto.randomBytes(16).toString('hex')) => ({
 const verifyPassword = (pw, rec) =>
   !!rec && crypto.timingSafeEqual(Buffer.from(rec.hash, 'hex'), crypto.scryptSync(pw, rec.salt, 64));
 
-if (!exists('admin')) {
-  const { salt, hash } = hashPassword(process.env.ADMIN_PASSWORD || 'Qahva@Admin2026');
-  writeJson('admin', { user: process.env.ADMIN_USER || 'admin', salt, hash });
+/* Admin credentials are re-seeded from the environment on every boot.
+   The host's filesystem is ephemeral — anything written to disk is wiped on
+   restart, spin-down and redeploy — so the env vars, not a JSON file, have to
+   be the source of truth. Otherwise ADMIN_PASSWORD is silently ignored. */
+const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Qahva@Admin2026';
+const envPrint = crypto.createHash('sha256').update(`${ADMIN_USER}:${ADMIN_PASSWORD}`).digest('hex');
+
+function seedAdmin() {
+  const { salt, hash } = hashPassword(ADMIN_PASSWORD);
+  const admin = { user: ADMIN_USER, salt, hash, envPrint };
+  writeJson('admin', admin);
+  return admin;
 }
+const stored = readJson('admin', null);
+if (!stored || stored.envPrint !== envPrint) seedAdmin();
+const currentAdmin = () => readJson('admin', null) || seedAdmin();
+
+/* Stateless signed tokens.
+   The previous version kept a tokens.json on disk. On an ephemeral filesystem
+   that file resets on every restart, so a logged-in admin got a 401 on the next
+   request while the browser still held the token — the redirect loop.
+   A signed token carries its own expiry and needs no storage at all. */
 const TOKEN_TTL = 7 * 24 * 3600 * 1000;
+// Derived from the credentials, not from the random salt, so it is identical on
+// every boot — a session stays valid across a restart. Changing the password
+// changes the secret, which invalidates every old token for free.
+const FALLBACK_SECRET = crypto.createHash('sha256').update(`qahva:${envPrint}`).digest();
+const tokenSecret = () =>
+  process.env.TOKEN_SECRET ? Buffer.from(process.env.TOKEN_SECRET) : FALLBACK_SECRET;
+const b64 = (v) => Buffer.from(v).toString('base64url');
+
 function issueToken() {
-  const tokens = readJson('tokens', []).filter((t) => t.exp > Date.now());
-  const token = crypto.randomBytes(24).toString('hex');
-  tokens.push({ token, exp: Date.now() + TOKEN_TTL });
-  writeJson('tokens', tokens);
-  return token;
+  const body = b64(JSON.stringify({ u: currentAdmin().user, exp: Date.now() + TOKEN_TTL }));
+  const sig = b64(crypto.createHmac('sha256', tokenSecret()).update(body).digest());
+  return `${body}.${sig}`;
+}
+function verifyToken(token) {
+  const [body, sig] = String(token || '').split('.');
+  if (!body || !sig) return false;
+  const expected = b64(crypto.createHmac('sha256', tokenSecret()).update(body).digest());
+  const given = Buffer.from(sig);
+  const want = Buffer.from(expected);
+  if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) return false;
+  try {
+    return JSON.parse(Buffer.from(body, 'base64url').toString('utf8')).exp > Date.now();
+  } catch {
+    return false;
+  }
 }
 function auth(req, res, next) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  const ok = readJson('tokens', []).some((t) => t.token === token && t.exp > Date.now());
-  if (!ok) return res.status(401).json({ error: 'Unauthorized' });
+  if (!verifyToken(token)) return res.status(401).json({ error: 'Unauthorized' });
   next();
 }
 
@@ -186,29 +223,28 @@ app.post('/api/contact', (req, res) => {
 /* ---------------- admin: auth ---------------- */
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body || {};
-  const admin = readJson('admin', null);
+  const admin = currentAdmin();
   if (!admin || username !== admin.user || !verifyPassword(String(password || ''), admin))
     return res.status(401).json({ error: 'Invalid username or password.' });
   res.json({ ok: true, token: issueToken() });
 });
 app.post('/api/admin/change-password', auth, (req, res) => {
   const { current, next } = req.body || {};
-  const admin = readJson('admin', null);
+  const admin = currentAdmin();
   if (!verifyPassword(String(current || ''), admin)) return res.status(400).json({ error: 'Current password is incorrect.' });
   if (String(next || '').length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
   const { salt, hash } = hashPassword(String(next));
   writeJson('admin', { ...admin, salt, hash });
-  writeJson('tokens', []);
+  // Old tokens die on their own: the signing secret is derived from the hash.
   res.json({ ok: true });
 });
 app.post('/api/admin/forgot-password', (req, res) => {
   const { resetKey, next } = req.body || {};
   if (String(resetKey || '') !== RESET_KEY) return res.status(401).json({ error: 'Invalid reset key.' });
   if (String(next || '').length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
-  const admin = readJson('admin', null);
+  const admin = currentAdmin();
   const { salt, hash } = hashPassword(String(next));
   writeJson('admin', { ...admin, salt, hash });
-  writeJson('tokens', []);
   res.json({ ok: true });
 });
 
@@ -390,6 +426,9 @@ if (fs.existsSync(buildDir)) {
     res.sendFile(path.join(buildDir, 'index.html'));
   });
   console.log('   [web] serving frontend build');
+} else {
+  console.warn('   [web] no frontend/dist found — run the frontend build first');
 }
 
-app.listen(PORT, () => console.log(`QAHVA running on http://localhost:${PORT}`));
+// '0.0.0.0' is required by container hosts; the default bind can be rejected.
+app.listen(PORT, '0.0.0.0', () => console.log(`QAHVA running on port ${PORT}`));
